@@ -22,6 +22,7 @@ export default async function DashboardLayout({
     .maybeSingle();
 
   const ehExterno = !usuarioInterno;
+  const ehAdmin = usuarioInterno?.papel === "admin";
 
   if (usuarioInterno?.status === "pendente") {
     return (
@@ -54,6 +55,7 @@ export default async function DashboardLayout({
         </div>
         {!ehExterno && <NavLink href="/dashboard/nova">Nova solicitação</NavLink>}
         <NavLink href="/dashboard/inbox">Inbox</NavLink>
+        {ehAdmin && <NavLink href="/dashboard/admin">Administração</NavLink>}
       </nav>
       <main style={{ flex: 1, padding: "32px 40px", maxWidth: 980 }}>{children}</main>
     </div>
