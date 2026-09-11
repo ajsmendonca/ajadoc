@@ -2,7 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import SetoresManager from "./setores-manager";
 import TiposDocumentoManager from "./tipos-documento-manager";
-import CadastrosPendentes from "./cadastros-pendentes";
+import UsuariosManager from "./usuarios-manager";
 
 export default async function AdminPage() {
   const supabase = createClient();
@@ -31,10 +31,9 @@ export default async function AdminPage() {
     .select("id, nome, prazo_padrao_dias, ativo")
     .order("nome");
 
-  const { data: pendentes } = await supabase
+  const { data: usuarios } = await supabase
     .from("usuarios")
-    .select("id, nome, email, created_at")
-    .eq("status", "pendente")
+    .select("id, nome, email, papel, status, setor_id")
     .order("created_at");
 
   return (
@@ -47,7 +46,7 @@ export default async function AdminPage() {
       </div>
 
       <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
-        <CadastrosPendentes pendentes={pendentes ?? []} setores={setores ?? []} />
+        <UsuariosManager usuarios={usuarios ?? []} setores={setores ?? []} />
         <SetoresManager setores={setores ?? []} />
         <TiposDocumentoManager tipos={tiposDocumento ?? []} />
       </div>
