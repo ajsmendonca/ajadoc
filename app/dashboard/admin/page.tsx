@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
 import SetoresManager from "./setores-manager";
 import TiposDocumentoManager from "./tipos-documento-manager";
+import TiposAnexoManager from "./tipos-anexo-manager";
 import UsuariosManager from "./usuarios-manager";
 
 export default async function AdminPage() {
@@ -31,6 +32,11 @@ export default async function AdminPage() {
     .select("id, nome, prazo_padrao_dias, ativo")
     .order("nome");
 
+  const { data: tiposAnexo } = await supabase
+    .from("tipos_anexo")
+    .select("id, nome, ativo")
+    .order("nome");
+
   const { data: usuarios } = await supabase
     .from("usuarios")
     .select("id, nome, email, papel, status, setor_id")
@@ -49,6 +55,7 @@ export default async function AdminPage() {
         <UsuariosManager usuarios={usuarios ?? []} setores={setores ?? []} />
         <SetoresManager setores={setores ?? []} />
         <TiposDocumentoManager tipos={tiposDocumento ?? []} />
+        <TiposAnexoManager tipos={tiposAnexo ?? []} />
       </div>
     </div>
   );
