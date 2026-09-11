@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 
 type Setor = { id: string; nome: string };
+type TipoAnexo = { id: string; nome: string };
 
 export default function DespachoForm({
   protocoloId,
@@ -12,12 +13,14 @@ export default function DespachoForm({
   ehExterno,
   setores,
   setorAtualId,
+  tiposAnexo,
 }: {
   protocoloId: string;
   proximoSequencial: number;
   ehExterno: boolean;
   setores: Setor[];
   setorAtualId: string;
+  tiposAnexo: TipoAnexo[];
 }) {
   const supabase = createClient();
   const router = useRouter();
@@ -26,6 +29,8 @@ export default function DespachoForm({
   const [setorDestinoId, setSetorDestinoId] = useState("");
   const [devolverAoSolicitante, setDevolverAoSolicitante] = useState(false);
   const [visivelExternamente, setVisivelExternamente] = useState(true);
+  const [arquivo, setArquivo] = useState<File | null>(null);
+  const [tipoAnexoId, setTipoAnexoId] = useState("");
   const [carregando, setCarregando] = useState(false);
   const [erro, setErro] = useState<string | null>(null);
 
@@ -48,23 +53,53 @@ export default function DespachoForm({
     if (ehExterno) {
       payload.tipo_acao = "resposta";
       payload.visivel_externamente = true;
-      payload.setor_destino_id = setorAtualId; // não muda o setor responsável
+      payload.setor_destino_id = setorAtualId;
     } else {
       payload.usuario_remetente_id = user?.id;
       payload.visivel_externamente = visivelExternamente;
-      if (devolverAoSolicitante) {
-        payload.tipo_acao = "encaminhamento";
-        payload.setor_destino_id = null;
-        // destino_solicitante_id seria preenchido buscando o solicitante do protocolo
-      } else {
-        payload.tipo_acao = "encaminhamento";
-        payload.setor_destino_id = setorDestinoId || setorAtualId;
-      }
+      payload.tipo_acao = "encaminhamento";
+      payload.setor_destino_id = devolverAoSolicitante ? null : setorDestinoId || setorAtualId;
     }
 
-    const { error: despachoError } = await supabase.from("tramitacoes").insert(payload);
+    const { data: tramitacao, error: despachoError } = await supabase
+      .from("tramitacoes")
+      .insert(payload)
+      .select("id")
+      .single();
 
-    if (!despachoError && !ehExterno && setorDestinoId && !devolverAoSolicitante) {
+    if (despachoError || !tramitacao) {
+      setCarregando(false);
+      setErro(despachoError?.message ?? "Não foi possível enviar.");
+      return;
+    }
+
+    // upload do anexo, se houver
+    if (arquivo) {
+      const caminho = `${protocoloId}/${tramitacao.id}/${arquivo.name}`;
+      const { error: uploadError } = await supabase.storage
+        .from("anexos-protocolos")
+        .upload(caminho, arquivo);
+
+      if (uploadError) {
+        setCarregando(false);
+        setErro(`Despacho enviado, mas o anexo falhou: ${uploadError.message}`);
+        router.refresh();
+        return;
+      }
+
+      await supabase.from("anexos").insert({
+        protocolo_id: protocoloId,
+        tramitacao_id: tramitacao.id,
+        tipo_anexo_id: tipoAnexoId || null,
+        nome_arquivo: arquivo.name,
+        caminho_storage: caminho,
+        tipo_mime: arquivo.type,
+        tamanho_bytes: arquivo.size,
+        enviado_por_usuario_id: ehExterno ? null : user?.id,
+      });
+    }
+
+    if (!ehExterno && setorDestinoId && !devolverAoSolicitante) {
       await supabase
         .from("protocolos")
         .update({ setor_atual_id: setorDestinoId })
@@ -72,12 +107,9 @@ export default function DespachoForm({
     }
 
     setCarregando(false);
-    if (despachoError) {
-      setErro(despachoError.message);
-      return;
-    }
-
     setMensagem("");
+    setArquivo(null);
+    setTipoAnexoId("");
     router.refresh();
   }
 
@@ -120,6 +152,26 @@ export default function DespachoForm({
           placeholder="Adicione informações..."
           required
         />
+      </div>
+
+      <div className="field">
+        <label>Anexo (opcional)</label>
+        <input
+          type="file"
+          onChange={(e) => setArquivo(e.target.files?.[0] ?? null)}
+        />
+        {arquivo && (
+          <div style={{ marginTop: 8 }}>
+            <select value={tipoAnexoId} onChange={(e) => setTipoAnexoId(e.target.value)}>
+              <option value="">Tipo do anexo...</option>
+              {tiposAnexo.map((t) => (
+                <option key={t.id} value={t.id}>
+                  {t.nome}
+                </option>
+              ))}
+            </select>
+          </div>
+        )}
       </div>
 
       {!ehExterno && (
